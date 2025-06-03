@@ -1,0 +1,91 @@
+# Author: Dhatri Badri
+
+configfile: "config/config.yaml"
+
+import pandas as pd
+import os
+
+PREFIX = config["prefix"]
+READS_DIR = config["input_reads"]
+
+samples_df = pd.read_csv(config["samples"])
+SAMPLE = list(samples_df["sample"])
+
+# Make sample, reference pair list
+sample_ref_dict = dict(zip(samples_df["sample"], samples_df["reference_genome_path"]))
+
+# Create results directory
+os.makedirs(f"results/{PREFIX}", exist_ok=True)
+
+rule all:
+    input:
+        expand("results/{prefix}/align_reads/{sample}/{sample}_aln.sam", prefix=PREFIX, sample=SAMPLE),
+        expand("results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam", prefix=PREFIX, sample=SAMPLE),
+        expand("results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz", prefix=PREFIX, sample=SAMPLE),
+
+rule align_reads:
+    input:
+        ref=lambda wc: sample_ref_dict[wc.sample],
+        r1=lambda wc: os.path.join(READS_DIR, f"{wc.sample}_R1_trim_paired.fastq.gz"),
+        r2=lambda wc: os.path.join(READS_DIR, f"{wc.sample}_R2_trim_paired.fastq.gz"),
+    output:
+        aligned_sam_out="results/{prefix}/align_reads/{sample}/{sample}_aln.sam"
+    params:
+        num_cores=config["ncores"]
+    log:
+        bwa_log="logs/{prefix}/{sample}/align_reads/{sample}.log"
+    # envmodules:
+    #    "Bioinformatics",
+    #    "bwa",
+    singularity:
+        "docker://staphb/bwa:0.7.17"
+    shell:
+        "workflow/scripts/align_reads.sh {input.r1} {params.num_cores} {input.ref} {input.r1} {input.r2} {output.aligned_sam_out} &> {log.bwa_log}"
+
+# samclip and sort bam file
+rule remove_clipped_reads:  
+    input:
+        aligned_sam_out = "results/{prefix}/align_reads/{sample}/{sample}_aln.sam"
+    output:
+        clipped_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclips.bam",
+        sorted_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam"
+    log:
+        clip_log = "logs/{prefix}/{sample}/align_reads/{sample}.log"
+    # envmodules:
+    #    "Bioinformatics",
+    #    "samtools",
+    singularity:
+        "docker://staphb/samtools:1.21"
+    shell:
+        """
+        samtools flagstat {input.aligned_sam_out}
+
+        # Convert SAM to BAM, removing hard-clipped reads
+        samtools view -h {input.aligned_sam_out} | awk 'BEGIN {{OFS="\\t"}} /^@/ || $6 !~ /H/' | samtools view -bS - > {output.clipped_bam_out}
+
+        # Sort BAM
+        samtools sort -m 500M -@ 0 -o {output.sorted_bam_out} {output.clipped_bam_out}
+
+        # Index sorted BAM
+        samtools index {output.sorted_bam_out}
+
+        samtools flagstat {output.sorted_bam_out}
+        """
+
+# # variant calling 
+# # gatk
+rule gatk_call_indels:
+    input:
+        index_sorted_bam = "results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam",
+        ref=lambda wc: sample_ref_dict[wc.sample],  
+    output:
+#        final_raw_vcf= f"results/{{prefix}}/{{sample}}/gatk_varcall/{{sample}}_aln_mpileup_raw.vcf",
+#        indel_file = f"results/{{prefix}}/{{sample}}/gatk_varcall/{{sample}}_indel.vcf",
+        vcf = "results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz"
+    # log:
+    #     "logs/{prefix}/{sample}/gatk/{sample}_gatk.log"
+    singularity:
+        "docker://broadinstitute/gatk:4.5.0.0"
+    shell:
+        "gatk Mutect2 -R {input.ref} -I {input.index_sorted_bam} --min-base-quality-score 20 --minimum-allele-fraction 0 -O {output.vcf}"
+
