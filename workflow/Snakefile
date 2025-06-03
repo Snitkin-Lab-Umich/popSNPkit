@@ -19,8 +19,8 @@ os.makedirs(f"results/{PREFIX}", exist_ok=True)
 
 rule all:
     input:
-        expand("results/{prefix}/align_reads/{sample}/{sample}_aln.sam", prefix=PREFIX, sample=SAMPLE),
-        expand("results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam", prefix=PREFIX, sample=SAMPLE),
+        # expand("results/{prefix}/align_reads/{sample}/{sample}_aln.sam", prefix=PREFIX, sample=SAMPLE),
+        # expand("results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam", prefix=PREFIX, sample=SAMPLE),
         expand("results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz", prefix=PREFIX, sample=SAMPLE),
 
 rule align_reads:
@@ -74,7 +74,7 @@ rule remove_clipped_reads:
 
 # # variant calling 
 # # gatk
-rule gatk_call_indels:
+rule gatk:
     input:
         index_sorted_bam = "results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam",
         ref=lambda wc: sample_ref_dict[wc.sample],  
