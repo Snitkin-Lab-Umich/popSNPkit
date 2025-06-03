@@ -1,13 +1,14 @@
 # popSNPkit
-Variant calling pipeline for population data
+Variant calling pipeline for population sequencing data.
 
 ## Summary
 This pipeline perfroms the following steps:
-- 
-- 
--
+- Input to pipeline is trimmed and filtered reads from [popQCD](https://github.com/Snitkin-Lab-Umich/popQCD).
+- Assembles trimmed reads into contigs using [bwa](https://github.com/lh3/bwa/tree/af606fc31a76eb02d3ef88c3056f53b4c915a743)(v0.7.17)
+- Convert sam file from bwa to bam using [samtools](https://github.com/samtools/samtools)(1.21) 
+- Variant calling using [gatk](https://github.com/broadinstitute/gatk)(v4.5.0.0)
 
-The workflow generates all the output in the `prefix` folder set in  `config/config.yaml`. Each workflow steps gets its own individual folder as shown below. This structure provides a general view of how outputs are organized, with each tool or workflow step having its own directory. **_Note that this overview does not capture all possible outputs from each tool; it only highlights the primary directories and _SOME_ of their contents._** 
+The workflow generates all the output in the `prefix` folder set in `config/config.yaml`. Each workflow steps gets its own individual folder as shown below. This structure provides a general view of how outputs are organized, with each tool or workflow step having its own directory. **_Note that this overview does not capture all possible outputs from each tool; it only highlights the primary directories and _SOME_ of their contents._** 
 
 ```
 (base) [dhatrib@gl-login1 popSNPkit]$ tree results/2025-06-02_Project_Test_Pipeline_popSNPkit/
@@ -43,7 +44,42 @@ results/2025-06-02_Project_Test_Pipeline_popSNPkit/
         └── Rush_KPC_POP_29.vcf.gz.tbi
 
 ```
+## Installation 
 
+
+> If you are using Great Lakes HPC, ensure you are cloning the repository in your scratch directory. Change `your_uniqname` to your uniqname. 
+
+```
+
+cd /scratch/esnitkin_root/esnitkin1/your_uniqname/
+
+```
+
+> Clone the github directory onto your system. 
+
+```
+
+git clone https://github.com/Snitkin-Lab-Umich/popSNPkit.git
+
+```
+
+> Ensure you have successfully cloned pubQCD. Type `ls` and you should see the newly created directory **_popSNPkit_**. Move to the newly created directory.
+
+```
+
+cd popSNPkit
+
+```
+
+> Load Bioinformatics, snakemake and singularity modules from Great Lakes modules.
+
+```
+
+module load Bioinformatics snakemake singularity
+
+```
+
+This workflow makes use of singularity containers available through [State Public Health Bioinformatics](https://github.com/StaPH-B/docker-builds) group. If you are working on [Great Lakes](https://its.umich.edu/advanced-research-computing/high-performance-computing/great-lakes) (UofM HPC)—you can load snakemake and singularity modules as shown above. However, if you are running it on your local machine or other computing platform, ensure you have snakemake and singularity installed.
 
 ## Quick start
 
