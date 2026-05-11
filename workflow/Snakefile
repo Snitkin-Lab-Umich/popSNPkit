@@ -19,9 +19,7 @@ os.makedirs(f"results/{PREFIX}", exist_ok=True)
 
 rule all:
     input:
-        # expand("results/{prefix}/align_reads/{sample}/{sample}_aln.sam", prefix=PREFIX, sample=SAMPLE),
-        # expand("results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam", prefix=PREFIX, sample=SAMPLE),
-        expand("results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz", prefix=PREFIX, sample=SAMPLE),
+        expand("results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz", prefix=PREFIX, sample=SAMPLE)
 
 rule align_reads:
     input:
@@ -34,9 +32,6 @@ rule align_reads:
         num_cores=config["ncores"]
     log:
         bwa_log="logs/{prefix}/{sample}/align_reads/{sample}.log"
-    # envmodules:
-    #    "Bioinformatics",
-    #    "bwa",
     singularity:
         "docker://staphb/bwa:0.7.17"
     shell:
@@ -47,13 +42,12 @@ rule remove_clipped_reads:
     input:
         aligned_sam_out = "results/{prefix}/align_reads/{sample}/{sample}_aln.sam"
     output:
-        clipped_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclips.bam",
+        # clipped_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclips.bam",
         sorted_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam"
+    params:
+        clipped_bam_out = "results/{prefix}/align_reads/{sample}/{sample}_noclips.bam"
     log:
         clip_log = "logs/{prefix}/{sample}/align_reads/{sample}.log"
-    # envmodules:
-    #    "Bioinformatics",
-    #    "samtools",
     singularity:
         "docker://staphb/samtools:1.21"
     shell:
@@ -61,10 +55,16 @@ rule remove_clipped_reads:
         samtools flagstat {input.aligned_sam_out}
 
         # Convert SAM to BAM, removing hard-clipped reads
-        samtools view -h {input.aligned_sam_out} | awk 'BEGIN {{OFS="\\t"}} /^@/ || $6 !~ /H/' | samtools view -bS - > {output.clipped_bam_out}
+        samtools view -h {input.aligned_sam_out} | awk 'BEGIN {{OFS="\\t"}} /^@/ || $6 !~ /H/' | samtools view -bS - > {params.clipped_bam_out}
+
+        # remove intermediate SAM file to save space
+        rm {input.aligned_sam_out}
 
         # Sort BAM
-        samtools sort -m 500M -@ 0 -o {output.sorted_bam_out} {output.clipped_bam_out}
+        samtools sort -m 500M -@ 0 -o {output.sorted_bam_out} {params.clipped_bam_out}
+
+        # remove intermediate BAM file to save space
+        rm {params.clipped_bam_out}
 
         # Index sorted BAM
         samtools index {output.sorted_bam_out}
@@ -79,13 +79,10 @@ rule gatk:
         index_sorted_bam = "results/{prefix}/align_reads/{sample}/{sample}_noclip_sort.bam",
         ref=lambda wc: sample_ref_dict[wc.sample],  
     output:
-#        final_raw_vcf= f"results/{{prefix}}/{{sample}}/gatk_varcall/{{sample}}_aln_mpileup_raw.vcf",
-#        indel_file = f"results/{{prefix}}/{{sample}}/gatk_varcall/{{sample}}_indel.vcf",
         vcf = "results/{prefix}/gatk_varcall/{sample}/{sample}.vcf.gz"
-    # log:
-    #     "logs/{prefix}/{sample}/gatk/{sample}_gatk.log"
     singularity:
         "docker://broadinstitute/gatk:4.5.0.0"
     shell:
-        "gatk Mutect2 -R {input.ref} -I {input.index_sorted_bam} --min-base-quality-score 20 --minimum-allele-fraction 0 -O {output.vcf}"
-
+        """
+        gatk Mutect2 -R {input.ref} -I {input.index_sorted_bam} --min-base-quality-score 20 --minimum-allele-fraction 0 -O {output.vcf}
+        """
